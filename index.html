@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Civic_portal</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vanta/dist/vanta.net.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+
+<div id="bg"></div>
+<header><h1>🚀 <span data-lang="portalTitle">Futuristic Civic Portal</span></h1></header>
+
+<div class="card" style="position: fixed; top: 20px; right: 20px; max-width: 180px; padding: 8px 12px; z-index: 10; display: flex; align-items: center; gap: 8px;">
+  <span style="font-size: 1.5rem; line-height: 1;">🌐</span>
+  <select id="languageSelector" onchange="setLanguage(this.value)" style="width: auto; flex-grow: 1; margin-top: 0;">
+    <option value="en">English</option>
+    <option value="hi">हिन्दी</option>
+    <option value="mr">मराठी</option>
+  </select>
+</div>
+
+<div id="page0" class="card">
+<h2 data-lang="roleQuestion">👤 Who are you?</h2>
+<p class="small" data-lang="roleInstruction">Choose role to continue</p>
+<div style="display:flex;gap:12px;margin-top:16px">
+<button class="btn" onclick="goto('userLogin')" data-lang="userButton">I am a User</button>
+<button class="btn" onclick="goto('adminLogin')" data-lang="adminButton">I am an Admin</button>
+</div>
+</div>
+
+<div id="userLogin" class="card hidden">
+<h2 data-lang="userLoginTitle">🔑 Sign in with Google</h2>
+<div id="g_id_onload"
+data-client_id="78294653625632128219829191827697190-jns027rf16apuo1l05uu3fq69i0lmbfr.apps.googleusercontent.com"
+data-callback="handleCredentialResponse">
+</div>
+<div class="g_id_signin" data-type="standard"></div>
+<p class="small" data-lang="userLoginInstruction">After signing in you'll be taken to the user portal</p>
+<p class="small"><a href="#" style="color:#00e5ff" onclick="goto('page0')" data-lang="backButton">← Back</a></p>
+</div>
+
+<div id="adminLogin" class="card hidden">
+<h2 data-lang="adminLoginTitle">🔐 Admin Login</h2>
+<input id="adminId" placeholder="Admin ID " data-lang-placeholder="adminIdPlaceholder">
+<div class="password-container">
+  <input id="adminPass" placeholder="Password " type="password" data-lang-placeholder="adminPassPlaceholder">
+  <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility()">👁️</button>
+</div>
+<div style="display:flex;gap:10px;margin-top:12px">
+<button class="btn" onclick="adminLogin()" data-lang="loginButton">Login</button>
+<button class="btn" onclick="goto('page0')" style="background:rgba(255,255,255,0.06)" data-lang="cancelButton">Cancel</button>
+</div>
+<p id="adminError" class="error hidden" data-lang="adminLoginError">❌ Incorrect ID or Password</p>
+</div>
+
+<div id="page3" class="card hidden">
+<h2 data-lang="reportIssueTitle">⚡ Report an Issue</h2>
+<textarea id="issueDesc" placeholder="Describe the issue..." rows="3" data-lang-placeholder="issueDescPlaceholder"></textarea>
+<select id="issueCat">
+<option value="" data-lang="selectCategoryPlaceholder">Select category</option>
+<option data-lang="catElectricity">Electricity</option>
+<option data-lang="catWater">Water</option>
+<option data-lang="catStreetlight">Streetlight</option>
+<option data-lang="catRoad">Road</option>
+<option data-lang="catSanitation">Sanitation</option>
+</select>
+
+<div style="margin-top:12px">
+<label class="small" data-lang="locationLabel">📍 Problem location</label>
+<input id="locationTxt" placeholder="Enter location manually" data-lang-placeholder="locationPlaceholder">
+</div>
+
+<div style="margin-top:12px">
+<label class="small" data-lang="imageLabel">📷 Image (upload or capture)</label>
+<div class="upload-row">
+<input id="imgUpload" type="file" accept="image/*" capture="environment">
+<button class="btn" id="startCamBtn" type="button" data-lang="startCamBtn">Start Camera</button>
+<button class="btn btn-danger hidden" id="removeImgBtn" type="button" data-lang="removeImageBtn">Remove Image</button>
+</div>
+<video id="imgVideo" class="hidden preview" autoplay playsinline style="max-height:300px"></video>
+<div class="controls hidden" id="imgCamControls">
+<button class="btn" id="takePhotoBtn" type="button" data-lang="takePhotoBtn">Take Photo</button>
+<button class="btn" id="stopCamBtn" type="button" data-lang="stopCamBtn">Stop Camera</button>
+</div>
+<canvas id="imgCanvas" class="hidden"></canvas>
+<img id="imgPreview" class="hidden preview" alt="image preview">
+</div>
+
+<div style="margin-top:14px">
+<label class="small" data-lang="videoLabel">🎥 Video (upload or record)</label>
+<div class="upload-row">
+<input id="vidUpload" type="file" accept="video/*" capture="camcorder">
+<button class="btn" id="startVidRec" type="button" data-lang="startVidRec">Start Recording</button>
+<button class="btn hidden" id="stopVidRec" type="button" data-lang="stopVidRec">Stop Recording</button>
+<button class="btn btn-danger hidden" id="removeVidBtn" type="button" data-lang="removeVidBtn">Remove Video</button>
+</div>
+<video id="vidPreview" class="hidden preview" controls style="max-height:300px"></video>
+</div>
+
+<div style="margin-top:14px">
+<label class="small" data-lang="audioLabel">🎙 Audio (upload or record)</label>
+<div class="upload-row">
+<input id="audUpload" type="file" accept="audio/*" capture="microphone">
+<button class="btn" id="startAudRec" type="button" data-lang="startAudRec">Start Recording</button>
+<button class="btn hidden" id="stopAudRec" type="button" data-lang="stopAudRec">Stop Recording</button>
+<button class="btn btn-danger hidden" id="removeAudBtn" type="button" data-lang="removeAudBtn">Remove Audio</button>
+</div>
+<audio id="audPreview" class="hidden preview" controls></audio>
+</div>
+
+<div style="display:flex;gap:12px;margin-top:16px">
+<button class="btn" onclick="submitReport()" data-lang="submitReportBtn">Submit Report</button>
+<button class="btn" onclick="logoutUser()" style="background:rgba(255,255,255,0.06)" data-lang="logoutBtn">Logout</button>
+</div>
+<div id="submitMsg" class="success hidden" data-lang="reportSuccessMsg">✅ Report submitted successfully!</div>
+<h3 style="margin-top:18px" data-lang="myReportsTitle">📋 My Reports</h3>
+<div id="userReports" class="reports-list"></div>
+</div>
+
+<div id="page4" class="card hidden">
+<h2 data-lang="adminDashboardTitle">🛠 Admin Dashboard</h2>
+<div id="allReports" class="reports-list"></div>
+<h3 style="margin-top:18px" data-lang="analyticsTitle">📊 Analytics</h3>
+<canvas id="statusChart" style="margin-top:8px"></canvas>
+<div style="margin-top:12px">
+<button class="btn" onclick="goto('page0')" style="background:rgba(255,255,255,0.06)" data-lang="backToRoleBtn">Back to Role Select</button>
+</div>
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
