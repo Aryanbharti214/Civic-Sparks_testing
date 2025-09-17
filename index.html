@@ -945,6 +945,9 @@ function gotoPage(id) {
     if (id === 'fieldStaffDashboard') {
         renderFieldStaffDashboard();
     }
+    if (id === 'fieldStaffDashboard') {
+    renderFieldStaffDashboard();
+}
 }
 
 // --------------------- Google Sign-in + Supabase auth exchange ---------------------
@@ -1235,7 +1238,56 @@ async function submitReport() {
         showStatusMessage(translations[currentLang].saveReportFailedAlert + (e.message || e), 'error');
     }
 }
+// Add this variable at the top of your script, next to the other global variables
+let currentFieldStaff = null;
+let fieldStaffWorkType = null;
 
+// login function for field staff
+async function fieldStaffLogin(){
+  const id = document.getElementById('fieldStaffId').value.trim();
+  const pass = document.getElementById('fieldStaffPass').value.trim();
+  const err = document.getElementById('fieldStaffError');
+
+  if (!id || !pass) {
+    err.textContent = translations[currentLang].fillAllFields;
+    err.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    // Query the field_staff table using the correct column names from your database.
+    const { data, error } = await supabaseClient
+      .from('field_staff')
+      .select('staff_id, password, assigned_category') // Fetch the columns you need
+      .eq('staff_id', id)
+      .eq('password', pass)
+      .single();
+
+    if (error || !data) {
+      err.textContent = translations[currentLang].adminLoginError;
+      err.classList.remove('hidden');
+      return;
+    }
+
+    // If login is successful, store the correct data.
+    currentFieldStaff = data;
+    // Use the correct column name, `assigned_category`, from your table.
+    fieldStaffWorkType = data.assigned_category; 
+    localStorage.setItem('civic_field_staff_id', data.staff_id);
+    localStorage.setItem('civic_field_staff_work_type', data.assigned_category);
+
+    err.classList.add('hidden');
+    document.getElementById('fieldStaffId').value = '';
+    document.getElementById('fieldStaffPass').value = '';
+    showStatusMessage('Login successful!', 'success');
+    gotoPage('fieldStaffDashboard');
+
+  } catch (e) {
+    console.error("Field staff login failed:", e);
+    err.textContent = translations[currentLang].adminLoginError;
+    err.classList.remove('hidden');
+  }
+}
 
 async function submitRating(reportId, rating) {
     try {
@@ -1250,6 +1302,112 @@ async function submitRating(reportId, rating) {
         showStatusMessage('Could not submit rating. Please try again.', 'error');
         console.error('Rating submission failed', e);
     }
+}
+//to render data to the assigned category
+async function renderFieldStaffDashboard() {
+  const availableJobsList = document.getElementById('availableJobsList');
+  const assignedJobsList = document.getElementById('assignedJobsList');
+  availableJobsList.innerHTML = `<p class="small">${translations[currentLang].loadingMessage}</p>`;
+  assignedJobsList.innerHTML = `<p class="small">${translations[currentLang].loadingMessage}</p>`;
+
+  // Use the value stored in local storage
+  const currentWorkType = localStorage.getItem('civic_field_staff_work_type');
+  const currentStaffId = localStorage.getItem('civic_field_staff_id');
+
+  if (!currentStaffId || !currentWorkType) {
+    availableJobsList.innerHTML = `<p class="small">Please log in to see your jobs.</p>`;
+    assignedJobsList.innerHTML = '';
+    return;
+  }
+
+  try {
+    // Fetch available jobs for the staff member's assigned category
+    const { data: available, error: availableError } = await supabaseClient
+      .from('reports')
+      .select('*')
+      .eq('cat', currentWorkType) // Use the work type from local storage
+      .in('status', ['Submitted', 'Accepted', 'In Progress'])
+      .is('field_staff_id', null);
+
+    if (availableError) throw availableError;
+    availableJobsList.innerHTML = '';
+    if (available.length === 0) {
+      availableJobsList.innerHTML = `<p class="small">No new jobs available in your area of expertise.</p>`;
+    } else {
+      available.forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'report';
+        card.innerHTML = `
+          <p><b>${escapeHtml(r.cat)}</b>: ${escapeHtml(r.desc)}</p>
+          <p class="small">${translations[currentLang].statusLabel}: ${escapeHtml(r.status)}</p>
+          <p class="small">Location: ${escapeHtml(r.location)}</p>
+          <button class="btn" style="width: auto; margin-top: 10px;" onclick="assignJob('${r.id}', '${currentStaffId}')">Accept Job</button>
+        `;
+        availableJobsList.appendChild(card);
+      });
+    }
+
+    // Fetch jobs assigned to the current staff member
+    const { data: assigned, error: assignedError } = await supabaseClient
+      .from('reports')
+      .select('*')
+      .eq('field_staff_id', currentStaffId);
+
+    if (assignedError) throw assignedError;
+    assignedJobsList.innerHTML = '';
+    if (assigned.length === 0) {
+      assignedJobsList.innerHTML = `<p class="small">You have no jobs assigned to you.</p>`;
+    } else {
+      assigned.forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'report';
+        card.innerHTML = `
+          <p><b>${escapeHtml(r.cat)}</b>: ${escapeHtml(r.desc)}</p>
+          <p class="small">${translations[currentLang].statusLabel}: ${escapeHtml(r.status)}</p>
+          <p class="small">Location: ${escapeHtml(r.location)}</p>
+          <div class="controls" style="margin-top: 10px;">
+            <button class="btn" onclick="updateJobStatus('${r.id}', 'In Progress')" style="background-color: #ffc107; color: #333;">In Progress</button>
+            <button class="btn" onclick="updateJobStatus('${r.id}', 'Resolved')" style="background-color: #28a745;">Resolved</button>
+          </div>
+        `;
+        assignedJobsList.appendChild(card);
+      });
+    }
+
+  } catch (e) {
+    console.error("Failed to render field staff dashboard:", e);
+    availableJobsList.innerHTML = `<p class="small error">Failed to load jobs.</p>`;
+    assignedJobsList.innerHTML = `<p class="small error">Failed to load jobs.</p>`;
+  }
+}
+async function assignJob(reportId, staffId) {
+  try {
+    const { error } = await supabaseClient
+      .from('reports')
+      .update({ status: 'Accepted', field_staff_id: staffId })
+      .eq('id', reportId);
+    if (error) throw error;
+    showStatusMessage('Job assigned successfully!', 'success');
+    renderFieldStaffDashboard();
+  } catch (e) {
+    showStatusMessage('Failed to accept job.', 'error');
+    console.error('Error assigning job:', e);
+  }
+}
+
+async function updateJobStatus(reportId, newStatus) {
+  try {
+    const { error } = await supabaseClient
+      .from('reports')
+      .update({ status: newStatus })
+      .eq('id', reportId);
+    if (error) throw error;
+    showStatusMessage(`Report status updated to ${newStatus}!`, 'success');
+    renderFieldStaffDashboard();
+  } catch (e) {
+    showStatusMessage('Failed to update job status.', 'error');
+    console.error('Error updating job status:', e);
+  }
 }
 async function renderUserReports(){
   const reportsList = document.getElementById('userReports');
@@ -1483,9 +1641,21 @@ async function updateCharts(){
     chartObj=new Chart(ctx,{type:'bar',data:data,options:{responsive:true, plugins:{legend:{display:false}}, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }}});
   } catch(e){ console.error('charts', e); }
 }
-
-async function logoutUser(){ await supabaseClient.auth.signOut(); localStorage.removeItem('civic_current_user'); localStorage.removeItem('civic_user_id'); currentUserEmail=null; currentUserId=null; gotoPage('userLogin'); }
-
+//logout function
+async function logoutUser(){
+  // Check if the user is a field staff and clear their local storage
+  if(localStorage.getItem('civic_field_staff_id')) {
+    localStorage.removeItem('civic_field_staff_id');
+    localStorage.removeItem('civic_field_staff_work_type');
+  }
+  // Clear user credentials if they exist
+  await supabaseClient.auth.signOut();
+  localStorage.removeItem('civic_current_user');
+  localStorage.removeItem('civic_user_id');
+  currentUserEmail=null;
+  currentUserId=null;
+  gotoPage('userLogin');
+}
 function escapeHtml(str){ return (str||'').toString().replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
 const translations = {
